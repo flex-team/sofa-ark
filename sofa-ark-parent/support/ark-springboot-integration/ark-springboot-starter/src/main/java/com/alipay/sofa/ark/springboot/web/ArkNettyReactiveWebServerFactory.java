@@ -22,12 +22,12 @@ import com.alipay.sofa.ark.spi.service.ArkInject;
 import com.alipay.sofa.ark.spi.service.biz.BizManagerService;
 import com.alipay.sofa.ark.spi.web.EmbeddedServerService;
 import org.springframework.boot.ssl.SslBundle;
-import org.springframework.boot.web.embedded.netty.NettyReactiveWebServerFactory;
-import org.springframework.boot.web.embedded.netty.NettyRouteProvider;
-import org.springframework.boot.web.embedded.netty.NettyServerCustomizer;
-import org.springframework.boot.web.embedded.netty.SslServerCustomizer;
+import org.springframework.boot.reactor.netty.NettyReactiveWebServerFactory;
+import org.springframework.boot.reactor.netty.NettyRouteProvider;
+import org.springframework.boot.reactor.netty.NettyServerCustomizer;
+import org.springframework.boot.reactor.netty.SslServerCustomizer;
 import org.springframework.boot.web.server.WebServer;
-import org.springframework.http.client.reactive.ReactorResourceFactory;
+import org.springframework.http.client.ReactorResourceFactory;
 import org.springframework.http.server.reactive.ContextPathCompositeHandler;
 import org.springframework.http.server.reactive.HttpHandler;
 import org.springframework.http.server.reactive.ReactorHttpHandlerAdapter;
@@ -164,7 +164,7 @@ public class ArkNettyReactiveWebServerFactory extends NettyReactiveWebServerFact
 
     private HttpServer customizeSslConfiguration(HttpServer httpServer) {
 
-        SslServerCustomizer customizer = new SslServerCustomizer(this.getHttp2(), this.getSsl().getClientAuth(), this.getSslBundle());
+        SslServerCustomizer customizer = new SslServerCustomizer(this.getHttp2(), this.getSsl().getClientAuth(), this.getSslBundle(), this.getServerNameSslBundles());
         String bundleName = this.getSsl().getBundle();
         if (StringUtils.hasText(bundleName)) {
             try{

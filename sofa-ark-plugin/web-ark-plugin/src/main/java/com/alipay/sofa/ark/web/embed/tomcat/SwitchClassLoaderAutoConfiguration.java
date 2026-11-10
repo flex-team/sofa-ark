@@ -43,9 +43,9 @@ public class SwitchClassLoaderAutoConfiguration {
     @ConditionalOnClass(value = { Servlet.class, Tomcat.class, UpgradeProtocol.class }, name = {
             "com.alipay.sofa.ark.springboot2.web.SwitchClassLoaderFilter",
             "com.alipay.sofa.ark.web.embed.tomcat.ArkTomcatEmbeddedWebappClassLoader",
-            "org.springframework.boot.web.servlet.server.ServletWebServerFactory",
-            "org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration",
-            "org.springframework.boot.web.embedded.tomcat.TomcatProtocolHandlerCustomizer" })
+            "org.springframework.boot.web.server.servlet.ServletWebServerFactory",
+            "org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration",
+            "org.springframework.boot.tomcat.TomcatProtocolHandlerCustomizer" })
     public Filter switchClassLoaderFilter() {
         try {
             Class<?> clazz = Class

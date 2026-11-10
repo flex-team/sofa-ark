@@ -22,7 +22,7 @@ import io.netty.util.concurrent.DefaultEventExecutor;
 import org.apache.commons.logging.Log;
 import org.apache.commons.logging.LogFactory;
 import org.reactivestreams.Publisher;
-import org.springframework.boot.web.embedded.netty.NettyRouteProvider;
+import org.springframework.boot.reactor.netty.NettyRouteProvider;
 import org.springframework.boot.web.server.PortInUseException;
 import org.springframework.boot.web.server.WebServer;
 import org.springframework.boot.web.server.WebServerException;

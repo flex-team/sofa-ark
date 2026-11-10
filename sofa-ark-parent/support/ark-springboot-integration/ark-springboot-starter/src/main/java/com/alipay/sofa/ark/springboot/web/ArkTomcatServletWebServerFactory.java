@@ -17,35 +17,38 @@
 package com.alipay.sofa.ark.springboot.web;
 
 import com.alipay.sofa.ark.api.ArkClient;
-import com.alipay.sofa.ark.common.util.AssertUtils;
 import com.alipay.sofa.ark.spi.model.Biz;
 import com.alipay.sofa.ark.spi.service.ArkInject;
 import com.alipay.sofa.ark.spi.service.biz.BizManagerService;
 import com.alipay.sofa.ark.spi.web.EmbeddedServerService;
+import jakarta.servlet.ServletContainerInitializer;
 import org.apache.catalina.Context;
-import org.apache.catalina.Engine;
 import org.apache.catalina.Host;
 import org.apache.catalina.Lifecycle;
 import org.apache.catalina.LifecycleEvent;
 import org.apache.catalina.LifecycleListener;
 import org.apache.catalina.LifecycleState;
-import org.apache.catalina.Valve;
 import org.apache.catalina.WebResourceRoot;
 import org.apache.catalina.Wrapper;
-import org.apache.catalina.connector.Connector;
 import org.apache.catalina.core.StandardContext;
+import org.apache.catalina.loader.WebappClassLoaderBase;
 import org.apache.catalina.loader.WebappLoader;
 import org.apache.catalina.startup.Tomcat;
 import org.apache.catalina.webresources.StandardRoot;
+import org.apache.commons.logging.Log;
+import org.apache.commons.logging.LogFactory;
 import org.apache.tomcat.util.scan.StandardJarScanFilter;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
-import org.springframework.boot.web.embedded.tomcat.TomcatWebServer;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
 import org.springframework.boot.web.server.WebServer;
+import org.springframework.boot.web.server.servlet.ContextPath;
+import org.springframework.boot.web.server.servlet.DocumentRoot;
+import org.springframework.boot.web.server.servlet.Jsp;
+import org.springframework.boot.web.server.servlet.ServletContextInitializers;
+import org.springframework.boot.web.server.servlet.ServletWebServerSettings;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
 import org.springframework.util.ClassUtils;
 import org.springframework.util.StringUtils;
 
-import jakarta.servlet.ServletContainerInitializer;
 import java.io.File;
 import java.net.URL;
 import java.nio.charset.Charset;
@@ -56,22 +59,16 @@ import java.util.Map;
 
 import static com.alipay.sofa.ark.spi.constant.Constants.ROOT_WEB_CONTEXT_PATH;
 
-/**
- * @author Phillip Webb
- * @author Dave Syer
- * @author Brock Mills
- * @author Stephane Nicoll
- * @author Andy Wilkinson
- * @author Eddú Meléndez
- * @author Christoffer Sawicki
- * @author qilong.zql
- * @since 0.6.0
- */
 public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFactory {
 
-    private static final Charset  DEFAULT_CHARSET = StandardCharsets.UTF_8;
+    private static final Log      LOGGER                  = LogFactory
+                                                              .getLog(ArkTomcatServletWebServerFactory.class);
 
-    private final Object          lock            = new Object();
+    private static final Charset  DEFAULT_CHARSET         = StandardCharsets.UTF_8;
+
+    private static final String   ARK_WEBAPP_CLASS_LOADER = "com.alipay.sofa.ark.web.embed.tomcat.ArkTomcatEmbeddedWebappClassLoader";
+
+    private final Object          lock                    = new Object();
 
     @ArkInject
     private EmbeddedServerService embeddedServerService;
@@ -79,28 +76,19 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
     @ArkInject
     private BizManagerService     bizManagerService;
 
-    private File                  baseDirectory;
-
-    private String                protocol        = DEFAULT_PROTOCOL;
-
-    private int                   backgroundProcessorDelay;
-
     @Override
     public WebServer getWebServer(ServletContextInitializer... initializers) {
         if (embeddedServerService == null && ArkClient.getInjectionService() != null) {
-            // 非应用上下文 (例如: Spring Management Context) 没有经历 Start 生命周期, 不会被注入 ArkServiceInjectProcessor,
-            // 因此 @ArkInject 没有被处理, 需要手动处理
             ArkClient.getInjectionService().inject(this);
         }
+        applyBizContextPath();
         if (embeddedServerService == null) {
-            // 原有的逻辑中也有这个空值判断, 不确定注入后是否还会有用例会导致 embeddedServerService 为空
-            // 因此仍保留此 if 空值判断
             return super.getWebServer(initializers);
         }
         if (embeddedServerService.getEmbedServer(getPort()) == null) {
             synchronized (lock) {
                 if (embeddedServerService.getEmbedServer(getPort()) == null) {
-                    embeddedServerService.putEmbedServer(getPort(), initEmbedTomcat());
+                    embeddedServerService.putEmbedServer(getPort(), createTomcat());
                 }
             }
         }
@@ -111,16 +99,16 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
 
     @Override
     public String getContextPath() {
-        String contextPath = super.getContextPath();
+        String contextPath = getSettings().getContextPath().toString();
         if (bizManagerService == null) {
             return contextPath;
         }
         Biz biz = bizManagerService.getBizByClassLoader(Thread.currentThread()
             .getContextClassLoader());
-        if (!StringUtils.isEmpty(contextPath)) {
+        if (StringUtils.hasLength(contextPath)) {
             return contextPath;
         } else if (biz != null) {
-            if (StringUtils.isEmpty(biz.getWebContextPath())) {
+            if (!StringUtils.hasLength(biz.getWebContextPath())) {
                 return ROOT_WEB_CONTEXT_PATH;
             }
             return biz.getWebContextPath();
@@ -129,104 +117,99 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
         }
     }
 
-    private Tomcat initEmbedTomcat() {
-        Tomcat tomcat = new Tomcat();
-        File baseDir = (this.baseDirectory != null) ? this.baseDirectory : createTempDir("tomcat");
-        tomcat.setBaseDir(baseDir.getAbsolutePath());
-        Connector connector = new Connector(this.protocol);
-        tomcat.getService().addConnector(connector);
-        customizeConnector(connector);
-        tomcat.setConnector(connector);
-        tomcat.getHost().setAutoDeploy(false);
-        configureEngine(tomcat.getEngine());
-        for (Connector additionalConnector : getAdditionalTomcatConnectors()) {
-            tomcat.getService().addConnector(additionalConnector);
+    private void applyBizContextPath() {
+        String resolved = getContextPath();
+        if (!StringUtils.hasLength(resolved) || ROOT_WEB_CONTEXT_PATH.equals(resolved)) {
+            return;
         }
-        return tomcat;
-    }
-
-    @Override
-    public void setBaseDirectory(File baseDirectory) {
-        this.baseDirectory = baseDirectory;
-    }
-
-    /**
-     * The Tomcat protocol to use when create the {@link Connector}.
-     *
-     * @param protocol the protocol
-     * @see Connector#Connector(String)
-     */
-    @Override
-    public void setProtocol(String protocol) {
-        AssertUtils.isFalse(StringUtils.isEmpty(protocol), "Protocol must not be empty");
-        this.protocol = protocol;
-    }
-
-    @Override
-    public void setBackgroundProcessorDelay(int delay) {
-        this.backgroundProcessorDelay = delay;
-    }
-
-    private void configureEngine(Engine engine) {
-        engine.setBackgroundProcessorDelay(this.backgroundProcessorDelay);
-        for (Valve valve : getEngineValves()) {
-            engine.getPipeline().addValve(valve);
+        String normalized = resolved.startsWith("/") ? resolved : "/" + resolved;
+        while (normalized.length() > 1 && normalized.endsWith("/")) {
+            normalized = normalized.substring(0, normalized.length() - 1);
+        }
+        if (!normalized.equals(getSettings().getContextPath().toString())) {
+            getSettings().setContextPath(ContextPath.of(normalized));
         }
     }
 
     @Override
     protected void postProcessContext(Context context) {
-        ((WebappLoader) context.getLoader())
-            .setLoaderClass("com.alipay.sofa.ark.web.embed.tomcat.ArkTomcatEmbeddedWebappClassLoader");
+        WebappClassLoaderBase arkLoader = createArkWebappClassLoader(context.getParentClassLoader());
+        if (arkLoader != null) {
+            ((WebappLoader) context.getLoader()).setLoaderInstance(arkLoader);
+        }
+    }
+
+    private WebappClassLoaderBase createArkWebappClassLoader(ClassLoader parent) {
+        ClassLoader[] candidates = { parent, WebappLoader.class.getClassLoader() };
+        for (ClassLoader candidate : candidates) {
+            try {
+                Class<?> clazz = ClassUtils.forName(ARK_WEBAPP_CLASS_LOADER, candidate);
+                if (WebappClassLoaderBase.class.isAssignableFrom(clazz)) {
+                    return (WebappClassLoaderBase) clazz.getConstructor(ClassLoader.class)
+                        .newInstance(parent);
+                }
+            } catch (Throwable ex) {
+                LOGGER.debug("Cannot create " + ARK_WEBAPP_CLASS_LOADER + " via " + candidate, ex);
+            }
+        }
+        LOGGER.warn(ARK_WEBAPP_CLASS_LOADER + " not available, using default webapp class loader");
+        return null;
     }
 
     @Override
     protected void prepareContext(Host host, ServletContextInitializer[] initializers) {
         if (host.getState() == LifecycleState.NEW) {
             super.prepareContext(host, initializers);
-        } else {
-            File documentRoot = getValidDocumentRoot();
-            StandardContext context = new StandardContext();
-            if (documentRoot != null) {
-                context.setResources(new StandardRoot(context));
-            }
-            context.setName(getContextPath());
-            context.setDisplayName(getDisplayName());
-            context.setPath(getContextPath());
-            File docBase = (documentRoot != null) ? documentRoot : createTempDir("tomcat-docbase");
-            context.setDocBase(docBase.getAbsolutePath());
-            context.addLifecycleListener(new Tomcat.FixContextListener());
-            context.setParentClassLoader(Thread.currentThread().getContextClassLoader());
-            resetDefaultLocaleMapping(context);
-            addLocaleMappings(context);
-            context.setUseRelativeRedirects(false);
-            configureTldSkipPatterns(context);
-            WebappLoader loader = new WebappLoader();
-            loader
-                .setLoaderClass("com.alipay.sofa.ark.web.embed.tomcat.ArkTomcatEmbeddedWebappClassLoader");
-            loader.setDelegate(true);
-            context.setLoader(loader);
-            if (isRegisterDefaultServlet()) {
-                addDefaultServlet(context);
-            }
-            if (shouldRegisterJspServlet()) {
-                addJspServlet(context);
-                addJasperInitializer(context);
-            }
-            context.addLifecycleListener(new StaticResourceConfigurer(context));
-            ServletContextInitializer[] initializersToUse = mergeInitializers(initializers);
-            context.setParent(host);
-            configureContext(context, initializersToUse);
-            host.addChild(context);
+            return;
         }
+        ServletWebServerSettings settings = getSettings();
+        DocumentRoot documentRootResolver = new DocumentRoot(LOGGER);
+        documentRootResolver.setDirectory(settings.getDocumentRoot());
+        File documentRoot = documentRootResolver.getValidDirectory();
+        StandardContext context = new StandardContext();
+        if (documentRoot != null) {
+            context.setResources(new StandardRoot(context));
+        }
+        context.setName(getContextPath());
+        context.setDisplayName(settings.getDisplayName());
+        context.setPath(getContextPath());
+        File docBase = (documentRoot != null) ? documentRoot : createTempDir("tomcat-docbase");
+        context.setDocBase(docBase.getAbsolutePath());
+        context.addLifecycleListener(new Tomcat.FixContextListener());
+        ClassLoader parent = Thread.currentThread().getContextClassLoader();
+        context.setParentClassLoader(parent);
+        resetDefaultLocaleMapping(context);
+        addLocaleMappings(context, settings);
+        context.setUseRelativeRedirects(false);
+        configureTldSkipPatterns(context);
+        WebappLoader loader = new WebappLoader();
+        WebappClassLoaderBase arkLoader = createArkWebappClassLoader(parent);
+        if (arkLoader != null) {
+            loader.setLoaderInstance(arkLoader);
+        }
+        loader.setDelegate(true);
+        context.setLoader(loader);
+        if (settings.isRegisterDefaultServlet()) {
+            addDefaultServlet(context);
+        }
+        if (shouldRegisterJspServlet(settings)) {
+            addJspServlet(context, settings.getJsp());
+            addJasperInitializer(context);
+        }
+        context.addLifecycleListener(new StaticResourceConfigurer(context, settings));
+        ServletContextInitializers initializersToUse = ServletContextInitializers.from(settings,
+            initializers);
+        context.setParent(host);
+        configureContext(context, initializersToUse);
+        host.addChild(context);
     }
 
-    /**
-     * Override Tomcat's default locale mappings to align with other servers. See
-     * {@code org.apache.catalina.util.CharsetMapperDefault.properties}.
-     *
-     * @param context the context to reset
-     */
+    private boolean shouldRegisterJspServlet(ServletWebServerSettings settings) {
+        Jsp jsp = settings.getJsp();
+        return jsp != null && jsp.getRegistered()
+               && ClassUtils.isPresent(jsp.getClassName(), getClass().getClassLoader());
+    }
+
     private void resetDefaultLocaleMapping(StandardContext context) {
         context.addLocaleEncodingMappingParameter(Locale.ENGLISH.toString(),
             DEFAULT_CHARSET.displayName());
@@ -234,8 +217,8 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
             DEFAULT_CHARSET.displayName());
     }
 
-    private void addLocaleMappings(StandardContext context) {
-        for (Map.Entry<Locale, Charset> entry : getLocaleCharsetMappings().entrySet()) {
+    private void addLocaleMappings(StandardContext context, ServletWebServerSettings settings) {
+        for (Map.Entry<Locale, Charset> entry : settings.getLocaleCharsetMappings().entrySet()) {
             context.addLocaleEncodingMappingParameter(entry.getKey().toString(), entry.getValue()
                 .toString());
         }
@@ -254,18 +237,17 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
         defaultServlet.addInitParameter("debug", "0");
         defaultServlet.addInitParameter("listings", "false");
         defaultServlet.setLoadOnStartup(1);
-        // Otherwise the default location of a Spring DispatcherServlet cannot be set
         defaultServlet.setOverridable(true);
         context.addChild(defaultServlet);
         context.addServletMappingDecoded("/", "default");
     }
 
-    private void addJspServlet(Context context) {
+    private void addJspServlet(Context context, Jsp jsp) {
         Wrapper jspServlet = context.createWrapper();
         jspServlet.setName("jsp");
-        jspServlet.setServletClass(getJsp().getClassName());
+        jspServlet.setServletClass(jsp.getClassName());
         jspServlet.addInitParameter("fork", "false");
-        for (Map.Entry<String, String> entry : getJsp().getInitParameters().entrySet()) {
+        for (Map.Entry<String, String> entry : jsp.getInitParameters().entrySet()) {
             jspServlet.addInitParameter(entry.getKey(), entry.getValue());
         }
         jspServlet.setLoadOnStartup(3);
@@ -277,25 +259,29 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
     private void addJasperInitializer(StandardContext context) {
         try {
             ServletContainerInitializer initializer = (ServletContainerInitializer) ClassUtils
-                .forName("org.apache.jasper.servlet.JasperInitializer", null).newInstance();
+                .forName("org.apache.jasper.servlet.JasperInitializer", null)
+                .getDeclaredConstructor().newInstance();
             context.addServletContainerInitializer(initializer, null);
         } catch (Exception ex) {
-            // Probably not Tomcat 8
+            LOGGER.debug("JasperInitializer not available", ex);
         }
     }
 
     final class StaticResourceConfigurer implements LifecycleListener {
 
-        private final Context context;
+        private final Context                  context;
 
-        private StaticResourceConfigurer(Context context) {
+        private final ServletWebServerSettings settings;
+
+        private StaticResourceConfigurer(Context context, ServletWebServerSettings settings) {
             this.context = context;
+            this.settings = settings;
         }
 
         @Override
         public void lifecycleEvent(LifecycleEvent event) {
             if (event.getType().equals(Lifecycle.CONFIGURE_START_EVENT)) {
-                addResourceJars(getUrlsOfJarsWithMetaInfResources());
+                addResourceJars(settings.getStaticResourceUrls());
             }
         }
 
@@ -305,7 +291,6 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
                 if (path.endsWith(".jar") || path.endsWith(".jar!/")) {
                     String jar = url.toString();
                     if (!jar.startsWith("jar:")) {
-                        // A jar file in the file system. Convert to Jar URL.
                         jar = "jar:" + jar + "!/";
                     }
                     addResourceSet(jar);
@@ -318,17 +303,13 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
         private void addResourceSet(String resource) {
             try {
                 if (isInsideNestedJar(resource)) {
-                    // It's a nested jar but we now don't want the suffix because Tomcat
-                    // is going to try and locate it as a root URL (not the resource
-                    // inside it)
                     resource = resource.substring(0, resource.length() - 2);
                 }
                 URL url = new URL(resource);
-                String path = "/META-INF/resources";
                 this.context.getResources().createWebResourceSet(
-                    WebResourceRoot.ResourceSetType.RESOURCE_JAR, "/", url, path);
+                    WebResourceRoot.ResourceSetType.RESOURCE_JAR, "/", url, "/META-INF/resources");
             } catch (Exception ex) {
-                // Ignore (probably not a directory)
+                LOGGER.debug("Ignoring resource " + resource, ex);
             }
         }
 
@@ -337,14 +318,6 @@ public class ArkTomcatServletWebServerFactory extends TomcatServletWebServerFact
         }
     }
 
-    /**
-     * Factory method called to create the {@link TomcatWebServer}. Subclasses can
-     * override this method to return a different {@link TomcatWebServer} or apply
-     * additional processing to the Tomcat server.
-     *
-     * @param tomcat the Tomcat server.
-     * @return a new {@link TomcatWebServer} instance
-     */
     protected WebServer getWebServer(Tomcat tomcat) {
         return new ArkTomcatWebServer(tomcat, getPort() >= 0, tomcat);
     }

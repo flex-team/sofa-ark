@@ -32,7 +32,7 @@ import org.springframework.context.annotation.Configuration;
 @ConditionalOnArkEnabled
 @AutoConfigureBefore(name = {
                              "org.springframework.boot.autoconfigure.web.EmbeddedServletContainerAutoConfiguration",
-                             "org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration" })
+                             "org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration" })
 public class ArkAutoProcessorConfiguration {
     @Bean
     public static ArkServiceInjectProcessor serviceInjectProcessor() {

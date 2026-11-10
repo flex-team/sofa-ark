@@ -28,9 +28,9 @@ import org.apache.catalina.core.StandardHost;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
-import org.springframework.boot.web.embedded.tomcat.TomcatWebServer;
+import org.springframework.boot.tomcat.TomcatWebServer;
 import org.springframework.boot.web.servlet.ServletContextInitializer;
-import org.springframework.boot.web.servlet.server.Jsp;
+import org.springframework.boot.web.server.servlet.Jsp;
 
 import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
