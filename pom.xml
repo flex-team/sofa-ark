@@ -14,7 +14,7 @@
     </modules>
 
     <properties>
-<sofa.ark.version>3.2.1-boot4</sofa.ark.version>
+<sofa.ark.version>3.2.1-flex.boot4.1</sofa.ark.version>
         <sofa.ark.version.old>3.2.0</sofa.ark.version.old>
         <project.encoding>UTF-8</project.encoding>
         <java.version>17</java.version>
