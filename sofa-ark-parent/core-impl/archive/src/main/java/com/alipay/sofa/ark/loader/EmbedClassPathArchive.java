@@ -65,7 +65,8 @@ public class EmbedClassPathArchive extends ClasspathLauncher.ClassPathArchive {
         //将classpath中的biz包载入
         List<URL> urlList = filterBizUrl(Constants.ARK_BIZ_MARK_ENTRY);
         List<BizArchive> bizArchives = new LinkedList<>();
-        for (URL url : urlList) {
+        for (URL rawUrl : urlList) {
+            URL url = toClassicNestedUrl(rawUrl);
             //判断是classpath下的还是fatjar内的biz包
             if (url.getPath().contains(".jar!")) {
                 Archive archiveFromJarEntry = getArchiveFromJarEntry(url);
@@ -125,7 +126,18 @@ public class EmbedClassPathArchive extends ClasspathLauncher.ClassPathArchive {
         return pluginArchives;
     }
 
-    protected JarFileArchive getUrlJarFileArchive(URL url) throws IOException {
+    static URL toClassicNestedUrl(URL url) throws IOException {
+        String file = url.getFile();
+        int pos = file.indexOf(".jar/!");
+        if (pos < 0) {
+            return url;
+        }
+        String converted = file.substring(0, pos + 4) + FILE_IN_JAR + file.substring(pos + 6);
+        return new URL("file", null, converted);
+    }
+
+    protected JarFileArchive getUrlJarFileArchive(URL rawUrl) throws IOException {
+        URL url = toClassicNestedUrl(rawUrl);
         String file = url.getFile();
         if (file.contains(FILE_IN_JAR)) {
             int pos = file.indexOf(FILE_IN_JAR);
