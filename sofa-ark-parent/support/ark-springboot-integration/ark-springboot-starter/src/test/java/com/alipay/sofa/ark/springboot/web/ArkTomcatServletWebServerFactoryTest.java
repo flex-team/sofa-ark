@@ -134,10 +134,12 @@ public class ArkTomcatServletWebServerFactoryTest {
         urls.add(new URL("file:///!/aaa!/"));
 
         Constructor<StaticResourceConfigurer> declaredConstructor = StaticResourceConfigurer.class
-            .getDeclaredConstructor(ArkTomcatServletWebServerFactory.class, Context.class);
+            .getDeclaredConstructor(ArkTomcatServletWebServerFactory.class, Context.class,
+                org.springframework.boot.web.server.servlet.ServletWebServerSettings.class);
         declaredConstructor.setAccessible(true);
         StaticResourceConfigurer staticResourceConfigurer = declaredConstructor.newInstance(
-            arkTomcatServletWebServerFactory, new StandardContext());
+            arkTomcatServletWebServerFactory, new StandardContext(),
+            arkTomcatServletWebServerFactory.getSettings());
 
         Method addResourceJars = StaticResourceConfigurer.class.getDeclaredMethod(
             "addResourceJars", List.class);
