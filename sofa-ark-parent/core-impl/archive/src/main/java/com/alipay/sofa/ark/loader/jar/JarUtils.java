@@ -147,6 +147,7 @@ public class JarUtils {
         // 9. if is ark plugin, then return null to set declared default
         //10. use unpack model, file   /xxx/xxx/xxx-0.0.1-ark-biz.jar-unpack/
 
+        jarLocation = toClassicNestedLocation(jarLocation);
         // For non-unpacked paths, clean the jar location prefix and suffix
         if (jarLocation.contains(JAR_SUFFIX) && !jarLocation.contains(JAR_UNPACK)) {
             jarLocation = jarLocation.substring(0, jarLocation.lastIndexOf(JAR_SUFFIX) + JAR_SUFFIX.length());
@@ -194,6 +195,18 @@ public class JarUtils {
 
         });
         return artifactIdCacheMap.get(jarLocation).orElse(null);
+    }
+
+    static String toClassicNestedLocation(String jarLocation) {
+        String location = jarLocation;
+        if (location.startsWith("jar:")) {
+            location = location.substring("jar:".length());
+        }
+        if (!location.startsWith("nested:")) {
+            return jarLocation;
+        }
+        location = location.substring("nested:".length());
+        return location.replace(".jar/!", ".jar!/");
     }
 
     private static String doGetArtifactIdFromFileName(String jarLocation) {

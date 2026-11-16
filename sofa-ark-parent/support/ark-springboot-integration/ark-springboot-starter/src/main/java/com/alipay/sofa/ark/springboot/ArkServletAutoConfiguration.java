@@ -25,12 +25,12 @@ import org.springframework.boot.autoconfigure.AutoConfigureBefore;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.SearchStrategy;
-import org.springframework.boot.autoconfigure.web.servlet.ServletWebServerFactoryAutoConfiguration;
-import org.springframework.boot.web.embedded.tomcat.TomcatConnectorCustomizer;
-import org.springframework.boot.web.embedded.tomcat.TomcatContextCustomizer;
-import org.springframework.boot.web.embedded.tomcat.TomcatProtocolHandlerCustomizer;
-import org.springframework.boot.web.embedded.tomcat.TomcatServletWebServerFactory;
-import org.springframework.boot.web.servlet.server.ServletWebServerFactory;
+import org.springframework.boot.tomcat.autoconfigure.servlet.TomcatServletWebServerAutoConfiguration;
+import org.springframework.boot.tomcat.TomcatConnectorCustomizer;
+import org.springframework.boot.tomcat.TomcatContextCustomizer;
+import org.springframework.boot.tomcat.TomcatProtocolHandlerCustomizer;
+import org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory;
+import org.springframework.boot.web.server.servlet.ServletWebServerFactory;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -43,8 +43,8 @@ import java.util.stream.Collectors;
  */
 @Configuration
 @ConditionalOnArkEnabled
-@ConditionalOnClass(ServletWebServerFactoryAutoConfiguration.class)
-@AutoConfigureBefore(ServletWebServerFactoryAutoConfiguration.class)
+@ConditionalOnClass(TomcatServletWebServerAutoConfiguration.class)
+@AutoConfigureBefore(TomcatServletWebServerAutoConfiguration.class)
 public class ArkServletAutoConfiguration {
 
     @Configuration
@@ -59,11 +59,11 @@ public class ArkServletAutoConfiguration {
                                                                            ObjectProvider<TomcatContextCustomizer> contextCustomizers,
                                                                            ObjectProvider<TomcatProtocolHandlerCustomizer<?>> protocolHandlerCustomizers) {
             ArkTomcatServletWebServerFactory factory = new ArkTomcatServletWebServerFactory();
-            factory.getTomcatConnectorCustomizers().addAll(
+            factory.getConnectorCustomizers().addAll(
                 connectorCustomizers.orderedStream().collect(Collectors.toList()));
-            factory.getTomcatContextCustomizers().addAll(
+            factory.getContextCustomizers().addAll(
                 contextCustomizers.orderedStream().collect(Collectors.toList()));
-            factory.getTomcatProtocolHandlerCustomizers().addAll(
+            factory.getProtocolHandlerCustomizers().addAll(
                 protocolHandlerCustomizers.orderedStream().collect(Collectors.toList()));
             return factory;
         }

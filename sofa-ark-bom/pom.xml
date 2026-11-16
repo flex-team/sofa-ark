@@ -17,7 +17,7 @@
         <log4j.version>2.0.11</log4j.version>
         <log.sofa.starter.version>3.16.3</log.sofa.starter.version>
         <sofa.common.tools.version>2.0.3</sofa.common.tools.version>
-        <logback.version>1.4.14</logback.version>
+        <logback.version>1.5.32</logback.version>
 
         <guice.version>6.0.0</guice.version>
         <asm.version>9.8</asm.version>
@@ -51,7 +51,7 @@
         <surefire.version>2.22.2</surefire.version>
         <netty.version>4.1.109.Final</netty.version>
         <reactor-netty.version>1.0.39</reactor-netty.version>
-        <spring.boot.version>3.2.1</spring.boot.version>
+        <spring.boot.version>4.0.4</spring.boot.version>
     </properties>
 
     <dependencyManagement>
@@ -398,6 +398,7 @@
                     <version>${surefire.version}</version>
                     <configuration>
                         <argLine>
+                            -DloggingRoot=${project.build.directory}/logs
                             --add-opens java.base/java.lang=ALL-UNNAMED
                             --add-opens java.base/java.lang.management=ALL-UNNAMED
                             --add-opens java.base/java.util=ALL-UNNAMED

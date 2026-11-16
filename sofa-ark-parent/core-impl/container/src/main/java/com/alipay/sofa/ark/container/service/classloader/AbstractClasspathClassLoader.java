@@ -546,7 +546,10 @@ public abstract class AbstractClasspathClassLoader extends URLClassLoader {
      */
     protected Class<?> resolveJavaAgentClass(String name) {
         try {
-            classloaderService.getAgentClassLoader().loadClass(name);
+            if (classloaderService.getAgentClassLoader().getResource(
+                name.replace('.', '/') + ".class") == null) {
+                return null;
+            }
             return classloaderService.getSystemClassLoader().loadClass(name);
         } catch (ClassNotFoundException e) {
             // ignore
