@@ -1,3 +1,44 @@
+# Spring Boot 4 / JDK 21 지원 포크
+
+이 브랜치(`flex/boot4`)는 SOFAArk `3.2.x`(`fe55cf356a`)를 Spring Boot 4.0 / Tomcat 11 / JDK 21에서 동작하도록 수정한 포크다. 버전은 `3.2.1-flex.boot4.1`이다. 짝이 되는 Koupleless runtime 포크는 같은 owner의 `koupleless-runtime` 저장소 `flex/boot4` 브랜치다.
+
+## 빌드
+
+```
+./build.sh                       # install, 테스트 포함
+SKIP_TESTS=1 ./build.sh
+MAVEN_REPO=<로컬 maven 디렉터리> ./build.sh
+```
+
+빌드 JDK는 `.sdkmanrc`(17)이고 CI(`.github/workflows/boot4_ci.yml`)는 JDK 21로 Spring Boot 4.0.4·4.1.0 매트릭스를 돌린다.
+
+## upstream 대비 변경
+
+| 변경 | 내용 |
+|---|---|
+| nested jar URL 정규화 | Spring Boot 4 loader의 nested jar URL 형식을 `EmbedClassPathArchive`·`JarUtils`·`AbstractClasspathClassLoader`가 처리한다 |
+| 내장 웹 서버 | `ArkTomcatServletWebServerFactory` 등 Ark 웹 서버 팩토리와 auto-configuration을 Spring Boot 4 / Tomcat 11 패키지·구조에 맞춘다 |
+| Spring Boot 4.0.4 BOM | `sofa-ark-bom`의 `spring.boot.version`을 4.0.4로 올리고 테스트 import를 바꾼다 |
+| javaagent 클래스 탐지 | agent 클래스로더에서 `loadClass` 대신 리소스 존재로 확인한다. fat javaagent가 프레임워크 클래스를 담고 있으면 `loadClass`가 링크 단계에서 `NoClassDefFoundError`로 실패한다 |
+| logback 1.5.32 | Spring Boot 4 로깅이 쓰는 `StatusPrinter2`가 logback 1.4.x에 없다 |
+| 빌드 설정 | 포크 버전, `.sdkmanrc`(JDK 17), surefire `loggingRoot`를 모듈 `target/logs`로 지정, `build.sh`, CI workflow |
+
+## 테스트 현황
+
+`./build.sh`(JDK 17 Corretto 17.0.4.1, Maven 3.9.3, Spring Boot 4.0.4) 결과: 12개 모듈, 테스트 385, 실패 0, 오류 0.
+
+| 대상 | 종류 | 사유 |
+|---|---|---|
+| `JGitParserTest#testParse`의 repository URL 단언 | `Assume` | remote가 없는 checkout에서는 원격 URL이 null이다 |
+| `ArkTestNG*` | surefire 제외 | upstream 설정 그대로 |
+| `SpringBoot2*Test` (ark-compatible-springboot2) | surefire 제외 | upstream 설정 그대로 |
+
+upstream 대비 테스트 수정: `ArkTomcatServletWebServerFactoryTest#testStaticResourceConfigurer`(생성자 인자에 `ServletWebServerSettings` 추가, Boot 4 팩토리 구조 변경).
+
+검증하지 않은 경로: reactive(netty) 웹 서버 실기동, CI 매트릭스의 Spring Boot 4.1.x 로컬 실행.
+
+---
+
 # SOFAArk Project
 
 [![Build Status](https://travis-ci.org/sofastack/sofa-ark.svg?branch=master)](https://travis-ci.org/sofastack/sofa-ark)
