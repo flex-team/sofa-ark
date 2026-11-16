@@ -31,7 +31,7 @@ public class JGitParserTest {
     @Test
     public void testParse() {
 
-        File gitFile = new File("../../../../.git");
+        File gitFile = new File("../../../.git");
         GitInfo gitInfo = parse(gitFile);
         assertNotNull(gitInfo);
         gitInfo.getBuildUser();
